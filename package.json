@@ -1,0 +1,34 @@
+{
+  "name": "@archon-protocol/gatekeeper-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server for Archon Gatekeeper - DID resolution and search",
+  "main": "build/index.js",
+  "type": "module",
+  "bin": {
+    "gatekeeper-mcp-server": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "keywords": [
+    "mcp",
+    "archon",
+    "did",
+    "gatekeeper",
+    "decentralized-identity"
+  ],
+  "author": "Archetech",
+  "license": "MIT",
+  "dependencies": {
+    "@didcid/gatekeeper": "^0.4.3",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
