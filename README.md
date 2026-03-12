@@ -2,6 +2,8 @@
 
 MCP (Model Context Protocol) server for Archon Gatekeeper - provides DID resolution and search capabilities for AI agents.
 
+Supports both **local** (stdio) and **remote** (HTTP/SSE) transports.
+
 ## Features
 
 - **resolve_did** - Resolve any DID to its full document
@@ -26,14 +28,16 @@ npx @archon-protocol/gatekeeper-mcp-server
 
 ## Configuration
 
-Set environment variables:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ARCHON_GATEKEEPER_URL` | `https://archon.technology` | Gatekeeper API URL |
+| `TRANSPORT` | `stdio` | Transport mode: `stdio` or `http` |
+| `PORT` | `4251` | HTTP server port (when TRANSPORT=http) |
+| `HOST` | `0.0.0.0` | HTTP server host (when TRANSPORT=http) |
 
-```bash
-# Gatekeeper URL (defaults to https://archon.technology)
-ARCHON_GATEKEEPER_URL=https://archon.technology
-```
+## Usage
 
-## Usage with Claude Desktop
+### Local Mode (stdio) - Claude Desktop
 
 Add to your `claude_desktop_config.json`:
 
@@ -49,6 +53,32 @@ Add to your `claude_desktop_config.json`:
     }
   }
 }
+```
+
+### Remote Mode (HTTP/SSE) - Public Server
+
+Run as an HTTP server for remote AI agents:
+
+```bash
+TRANSPORT=http PORT=4251 npx @archon-protocol/gatekeeper-mcp-server
+```
+
+**Endpoints:**
+- `POST /mcp` - MCP Streamable HTTP endpoint
+- `GET /mcp` - SSE stream for server-initiated messages
+- `GET /health` - Health check
+
+**Public deployment at:** `https://mcp.archon.technology` (coming soon)
+
+### Docker
+
+```dockerfile
+FROM node:20-alpine
+RUN npm install -g @archon-protocol/gatekeeper-mcp-server
+ENV TRANSPORT=http
+ENV PORT=4251
+EXPOSE 4251
+CMD ["gatekeeper-mcp-server"]
 ```
 
 ## Example Queries
@@ -77,8 +107,11 @@ query_dids: {"didDocumentData.alias": "flaxscrip"}
 # Install dependencies
 npm install
 
-# Run in development mode
+# Run in development mode (stdio)
 npm run dev
+
+# Run in HTTP mode
+TRANSPORT=http npm run dev
 
 # Build
 npm run build

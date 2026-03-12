@@ -2,6 +2,8 @@
 /**
  * Gatekeeper MCP Server for Archon Protocol
  * DID resolution and search capabilities via MCP
+ * 
+ * Supports both stdio (local) and HTTP/SSE (remote) transports
  */
 
 import dotenv from 'dotenv';
@@ -9,6 +11,8 @@ dotenv.config();
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -17,9 +21,13 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import GatekeeperClient from '@didcid/gatekeeper/client';
+import { randomUUID } from 'crypto';
 
 // Configuration
 const GATEKEEPER_URL = process.env.ARCHON_GATEKEEPER_URL || process.env.GATEKEEPER_URL || 'https://archon.technology';
+const PORT = parseInt(process.env.PORT || '4251', 10);
+const HOST = process.env.HOST || '0.0.0.0';
+const TRANSPORT = process.env.TRANSPORT || 'stdio'; // 'stdio' or 'http'
 
 const SERVER_NAME = "gatekeeper-mcp-server";
 const SERVER_VERSION = "0.1.0";
@@ -295,6 +303,82 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
   }
 }
 
+function createServer(): Server {
+  const server = new Server(
+    { name: SERVER_NAME, version: SERVER_VERSION },
+    { capabilities: { tools: {} } }
+  );
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
+  
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    return handleToolCall(request.params.name, request.params.arguments || {});
+  });
+
+  return server;
+}
+
+async function runStdio() {
+  const server = createServer();
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  
+  console.error(`${SERVER_NAME} v${SERVER_VERSION} running on stdio`);
+  console.error(`Gatekeeper: ${GATEKEEPER_URL}`);
+}
+
+async function runHttp() {
+  const app = createMcpExpressApp({ 
+    host: HOST,
+    allowedHosts: ['*'] // Allow all hosts for public server
+  });
+
+  // Health check endpoint
+  app.get('/health', (_req, res) => {
+    res.json({ 
+      status: 'ok', 
+      server: SERVER_NAME, 
+      version: SERVER_VERSION,
+      gatekeeper: GATEKEEPER_URL 
+    });
+  });
+
+  // Store active transports by session
+  const transports = new Map<string, StreamableHTTPServerTransport>();
+
+  // MCP endpoint
+  app.all('/mcp', async (req, res) => {
+    // Get or create session ID
+    const sessionId = req.headers['mcp-session-id'] as string || randomUUID();
+    
+    let transport = transports.get(sessionId);
+    
+    if (!transport) {
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => sessionId,
+      });
+      
+      const server = createServer();
+      await server.connect(transport);
+      
+      transports.set(sessionId, transport);
+      
+      transport.onclose = () => {
+        transports.delete(sessionId);
+      };
+    }
+    
+    await transport.handleRequest(req, res);
+  });
+
+  app.listen(PORT, HOST, () => {
+    console.log(`${SERVER_NAME} v${SERVER_VERSION} running on http://${HOST}:${PORT}`);
+    console.log(`MCP endpoint: http://${HOST}:${PORT}/mcp`);
+    console.log(`Health check: http://${HOST}:${PORT}/health`);
+    console.log(`Gatekeeper: ${GATEKEEPER_URL}`);
+  });
+}
+
 async function main() {
   // Initialize gatekeeper client
   gatekeeper = new GatekeeperClient();
@@ -306,25 +390,11 @@ async function main() {
     becomeChattyAfter: 2
   });
 
-  // Create MCP server
-  const server = new Server(
-    { name: SERVER_NAME, version: SERVER_VERSION },
-    { capabilities: { tools: {} } }
-  );
-
-  // Register handlers
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
-  
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    return handleToolCall(request.params.name, request.params.arguments || {});
-  });
-
-  // Connect via stdio
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  
-  console.error(`${SERVER_NAME} v${SERVER_VERSION} running on stdio`);
-  console.error(`Gatekeeper: ${GATEKEEPER_URL}`);
+  if (TRANSPORT === 'http') {
+    await runHttp();
+  } else {
+    await runStdio();
+  }
 }
 
 // Cleanup
