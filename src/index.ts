@@ -12,7 +12,7 @@ dotenv.config();
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import express from 'express';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -328,10 +328,10 @@ async function runStdio() {
 }
 
 async function runHttp() {
-  const app = createMcpExpressApp({ 
-    host: HOST,
-    allowedHosts: ['*'] // Allow all hosts for public server
-  });
+  const app = express();
+  
+  // Parse JSON bodies for POST requests
+  app.use(express.json());
 
   // Health check endpoint
   app.get('/health', (_req, res) => {
