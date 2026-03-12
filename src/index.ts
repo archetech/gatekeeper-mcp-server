@@ -368,7 +368,7 @@ async function runHttp() {
       };
     }
     
-    await transport.handleRequest(req, res);
+    await transport.handleRequest(req, res, req.body);
   });
 
   app.listen(PORT, HOST, () => {
